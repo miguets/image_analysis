@@ -30,6 +30,19 @@ class ProcesadorImagenes:
         self.imagen_gris_p2 = None
         self.imagen_binaria_p2 = None
 
+        # Estado P3 - dos imágenes
+        self.img1_p3 = None
+        self.img2_p3 = None
+        self.img1_bin_p3 = None
+        self.img2_bin_p3 = None
+        self.img1_ruidosa_p3 = None
+        self.img2_ruidosa_p3 = None
+        # Estado P3 - una imagen
+        self.img_una_p3 = None
+        self.img_una_gris_p3 = None
+        self.img_una_bin_p3 = None
+        self.img_una_ruidosa_p3 = None
+
     def obtener_nombres_mapas(self):
         return list(self.mapas.keys())
 
@@ -65,7 +78,7 @@ class ProcesadorImagenes:
 
         return True
 
-    #                   PRÁCTICA 2 
+    #                   PRÁCTICA 2
 
     def _canal_a_imagen(self, canal, cmap):
         """Convierte un canal normalizado (0-1) a imagen BGR usando un colormap de matplotlib."""
@@ -198,3 +211,196 @@ class ProcesadorImagenes:
         file_bytes = np.asarray(bytearray(buf.read()), dtype=np.uint8)
         hist_img = cv2.imdecode(file_bytes, cv2.IMREAD_COLOR)
         return hist_img, stats
+
+    #                   PRÁCTICA 3
+
+    def cargar_img1_p3(self, ruta):
+        self.img1_p3 = cv2.imread(ruta)
+        self.img1_ruidosa_p3 = None
+        gris = cv2.cvtColor(self.img1_p3, cv2.COLOR_BGR2GRAY)
+        _, self.img1_bin_p3 = cv2.threshold(gris, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
+        return self.img1_bin_p3
+
+    def cargar_img2_p3(self, ruta):
+        self.img2_p3 = cv2.imread(ruta)
+        self.img2_ruidosa_p3 = None
+        gris = cv2.cvtColor(self.img2_p3, cv2.COLOR_BGR2GRAY)
+        _, self.img2_bin_p3 = cv2.threshold(gris, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
+        return self.img2_bin_p3
+
+    def operacion_logica_p3(self, operacion):
+        """Aplica operación lógica entre las imágenes binarizadas."""
+        if operacion in ("NOT 1", "NOT 2"):
+            img = self.img1_bin_p3 if operacion == "NOT 1" else self.img2_bin_p3
+            if img is None:
+                return None
+            return cv2.bitwise_not(img)
+
+        if self.img1_bin_p3 is None or self.img2_bin_p3 is None:
+            return None
+
+        h = min(self.img1_bin_p3.shape[0], self.img2_bin_p3.shape[0])
+        w = min(self.img1_bin_p3.shape[1], self.img2_bin_p3.shape[1])
+        a = cv2.resize(self.img1_bin_p3, (w, h))
+        b = cv2.resize(self.img2_bin_p3, (w, h))
+
+        if operacion == "AND":
+            return cv2.bitwise_and(a, b)
+        elif operacion == "OR":
+            return cv2.bitwise_or(a, b)
+        elif operacion == "XOR":
+            return cv2.bitwise_xor(a, b)
+        return None
+
+    def operacion_relacional_p3(self, op, umbral, target=1):
+        """Aplica operación relacional a la imagen binarizada (target 1 o 2)."""
+        img = self.img1_bin_p3 if target == 1 else self.img2_bin_p3
+        if img is None:
+            return None
+        if op == ">":
+            return (img > umbral).astype(np.uint8) * 255
+        elif op == "<":
+            return (img < umbral).astype(np.uint8) * 255
+        elif op == "==":
+            return (img == umbral).astype(np.uint8) * 255
+        return None
+
+    def _ruido_sal_pimienta(self, img_gris, cantidad):
+        """Agrega ruido sal y pimienta a una imagen en escala de grises."""
+        ruidosa = img_gris.copy()
+        total_px = img_gris.size
+        n_ruido = int(total_px * cantidad)
+
+        # Sal (blanco)
+        coords_sal = [np.random.randint(0, i, n_ruido // 2) for i in img_gris.shape]
+        ruidosa[coords_sal[0], coords_sal[1]] = 255
+
+        # Pimienta (negro)
+        coords_pim = [np.random.randint(0, i, n_ruido // 2) for i in img_gris.shape]
+        ruidosa[coords_pim[0], coords_pim[1]] = 0
+
+        return ruidosa
+
+    def _ruido_gaussiano(self, img_gris, sigma):
+        """Agrega ruido gaussiano a una imagen en escala de grises."""
+        ruido = np.random.normal(0, sigma, img_gris.shape).astype(np.float32)
+        ruidosa = img_gris.astype(np.float32) + ruido
+        ruidosa = np.clip(ruidosa, 0, 255).astype(np.uint8)
+        return ruidosa
+
+    def ruido_sp_img1_p3(self, cantidad):
+        if self.img1_bin_p3 is None:
+            return None
+        self.img1_ruidosa_p3 = self._ruido_sal_pimienta(self.img1_bin_p3, cantidad)
+        return self.img1_ruidosa_p3
+
+    def ruido_gauss_img1_p3(self, sigma):
+        if self.img1_bin_p3 is None:
+            return None
+        self.img1_ruidosa_p3 = self._ruido_gaussiano(self.img1_bin_p3, sigma)
+        return self.img1_ruidosa_p3
+
+    def ruido_sp_img2_p3(self, cantidad):
+        if self.img2_bin_p3 is None:
+            return None
+        self.img2_ruidosa_p3 = self._ruido_sal_pimienta(self.img2_bin_p3, cantidad)
+        return self.img2_ruidosa_p3
+
+    def ruido_gauss_img2_p3(self, sigma):
+        if self.img2_bin_p3 is None:
+            return None
+        self.img2_ruidosa_p3 = self._ruido_gaussiano(self.img2_bin_p3, sigma)
+        return self.img2_ruidosa_p3
+
+    def etiquetar_dos_filtrada_p3(self, img_bgr, connectivity):
+        """Aplica filtro mediana a img_bgr (sin modificar estado) y etiqueta."""
+        if img_bgr is None:
+            return None, None, 0
+        gris = cv2.cvtColor(img_bgr, cv2.COLOR_BGR2GRAY)
+        filtrada = cv2.medianBlur(gris, 3)
+        return self.etiquetar_p3(filtrada, connectivity)
+
+    def etiquetar_p3(self, img_bin_o_gris, connectivity):
+        """
+        Umbraliza a 127, ejecuta connectedComponents con la conectividad dada.
+        Retorna (colored_labels_BGR, contoured_BGR, count).
+        Optimizado: colorización vectorizada y un único findContours.
+        """
+        if img_bin_o_gris is None:
+            return None, None, 0
+
+        if len(img_bin_o_gris.shape) == 3:
+            gris = cv2.cvtColor(img_bin_o_gris, cv2.COLOR_BGR2GRAY)
+        else:
+            gris = img_bin_o_gris.copy()
+
+        _, binaria = cv2.threshold(gris, 127, 255, cv2.THRESH_BINARY)
+        num_labels, labels = cv2.connectedComponents(binaria, connectivity=connectivity)
+        count = num_labels - 1
+
+        # Colorización vectorizada con numpy fancy indexing (sin loop por etiqueta)
+        np.random.seed(42)
+        colors = np.random.randint(60, 240, (num_labels, 3), dtype=np.uint8)
+        colors[0] = [0, 0, 180]  # fondo rojo (BGR)
+        colored = colors[labels]  # shape (H, W, 3) en un solo paso
+
+        # Contornos: un único findContours sobre la imagen binaria completa
+        contoured = cv2.cvtColor(binaria, cv2.COLOR_GRAY2BGR)
+        contours, _ = cv2.findContours(binaria, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+        for i, cnt in enumerate(contours):
+            cv2.drawContours(contoured, [cnt], -1, (0, 200, 0), 1)
+            x, y, _, _ = cv2.boundingRect(cnt)
+            cv2.putText(contoured, str(i + 1), (x, max(y - 3, 10)),
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.4, (0, 0, 255), 1)
+
+        return colored, contoured, count
+
+    # --- P3 Una Imagen ---
+
+    def cargar_img_una_p3(self, ruta):
+        self.img_una_p3 = cv2.imread(ruta)
+        self.img_una_gris_p3 = None
+        self.img_una_bin_p3 = None
+        self.img_una_ruidosa_p3 = None
+        return self.img_una_p3
+
+    def convertir_gris_una_p3(self):
+        if self.img_una_p3 is None:
+            return None
+        self.img_una_gris_p3 = cv2.cvtColor(self.img_una_p3, cv2.COLOR_BGR2GRAY)
+        return self.img_una_gris_p3
+
+    def binarizar_una_p3(self, umbral=None):
+        """None = Otsu, int = umbral fijo. Retorna (img, thresh_val)."""
+        if self.img_una_gris_p3 is None:
+            return None, None
+        if umbral is None:
+            thresh_val, self.img_una_bin_p3 = cv2.threshold(
+                self.img_una_gris_p3, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU
+            )
+        else:
+            thresh_val, self.img_una_bin_p3 = cv2.threshold(
+                self.img_una_gris_p3, umbral, 255, cv2.THRESH_BINARY
+            )
+        return self.img_una_bin_p3, thresh_val
+
+    def ruido_sp_una_p3(self, cantidad):
+        """Aplica ruido S&P a img_una_bin_p3. Guarda en img_una_ruidosa_p3."""
+        if self.img_una_bin_p3 is None:
+            return None
+        self.img_una_ruidosa_p3 = self._ruido_sal_pimienta(self.img_una_bin_p3, cantidad)
+        return self.img_una_ruidosa_p3
+
+    def ruido_gauss_una_p3(self, sigma):
+        """Aplica ruido gaussiano a img_una_gris_p3. Guarda en img_una_ruidosa_p3."""
+        if self.img_una_gris_p3 is None:
+            return None
+        self.img_una_ruidosa_p3 = self._ruido_gaussiano(self.img_una_gris_p3, sigma)
+        return self.img_una_ruidosa_p3
+
+    def etiquetar_filtrada_p3(self, connectivity):
+        """Aplica filtro mediana 3x3 a la imagen ruidosa (sin modificar estado) y etiqueta."""
+        if self.img_una_ruidosa_p3 is None:
+            return None, None, 0
+        filtrada = cv2.medianBlur(self.img_una_ruidosa_p3, 3)
+        return self.etiquetar_p3(filtrada, connectivity)

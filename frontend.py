@@ -20,7 +20,7 @@ class InterfazApp:
         ttk.Label(self.frame_top, text="Selecciona la Práctica:", font=("Arial", 11, "bold")).pack(side="left", padx=5)
 
         self.combo_practicas = ttk.Combobox(self.frame_top, state="readonly", width=30)
-        self.combo_practicas['values'] = ("1. Mapas de Calor", "2. Modelos de Color", "3. Práctica 3 (Próximamente)")
+        self.combo_practicas['values'] = ("1. Mapas de Calor", "2. Modelos de Color", "3. Operaciones y Etiquetado")
         self.combo_practicas.set("1. Mapas de Calor")
         self.combo_practicas.pack(side="left", padx=10)
         self.combo_practicas.bind("<<ComboboxSelected>>", self.cambiar_practica)
@@ -43,6 +43,9 @@ class InterfazApp:
         elif "Modelos de Color" in seleccion:
             self.root.geometry("1150x780")
             self.cargar_interfaz_practica2()
+        elif "Operaciones" in seleccion:
+            self.root.geometry("1200x1000")
+            self.cargar_interfaz_practica3()
         else:
             ttk.Label(self.workspace, text=f"La {seleccion} aún no está implementada.", font=("Arial", 14)).pack(pady=100)
 
@@ -284,3 +287,568 @@ class InterfazApp:
                       anchor="w", width=22).grid(row=i, column=1, sticky="w", padx=10, pady=5)
 
         ttk.Button(popup, text="Cerrar", command=popup.destroy).pack(side="bottom", pady=8)
+
+    # ==================== PRÁCTICA 3 ====================
+
+    def cargar_interfaz_practica3(self):
+        # --- Selector de modo ---
+        frame_modo = ttk.Frame(self.workspace)
+        frame_modo.pack(fill="x", pady=5, padx=5)
+
+        ttk.Label(frame_modo, text="Modo:", font=("Arial", 10, "bold")).pack(side="left", padx=5)
+
+        self._p3_modo_var = tk.StringVar(value="dos")
+        ttk.Radiobutton(frame_modo, text="Dos Imágenes",
+                        variable=self._p3_modo_var, value="dos",
+                        command=self._p3_cambiar_modo).pack(side="left", padx=10)
+        ttk.Radiobutton(frame_modo, text="Una Imagen",
+                        variable=self._p3_modo_var, value="una",
+                        command=self._p3_cambiar_modo).pack(side="left", padx=10)
+
+        ttk.Separator(self.workspace, orient='horizontal').pack(fill='x', pady=4)
+
+        # --- Contenedor de contenido (se reconstruye al cambiar modo) ---
+        self._frame_p3_contenido = ttk.Frame(self.workspace)
+        self._frame_p3_contenido.pack(fill="both", expand=True)
+
+        self._p3_construir_dos_imagenes()
+
+    def _p3_cambiar_modo(self):
+        for widget in self._frame_p3_contenido.winfo_children():
+            widget.destroy()
+        if self._p3_modo_var.get() == "dos":
+            self._p3_construir_dos_imagenes()
+        else:
+            self._p3_construir_una_imagen()
+
+    # ---------- Dos Imágenes (Parte A y B) ----------
+
+    def _p3_construir_dos_imagenes(self):
+        parent = self._frame_p3_contenido
+
+        # --- Fila 1: cargar + op. lógica ---
+        ctrl1 = ttk.Frame(parent)
+        ctrl1.pack(fill="x", pady=3, padx=5)
+
+        ttk.Button(ctrl1, text="Cargar Imagen 1", command=self._p3_cargar_img1).pack(side="left", padx=4)
+        ttk.Button(ctrl1, text="Cargar Imagen 2", command=self._p3_cargar_img2).pack(side="left", padx=4)
+        ttk.Separator(ctrl1, orient='vertical').pack(side="left", fill='y', padx=8)
+
+        ttk.Label(ctrl1, text="Op. Lógica:").pack(side="left")
+        self._p3_combo_logica = ttk.Combobox(ctrl1, values=["AND", "OR", "XOR", "NOT 1", "NOT 2"],
+                                              state="readonly", width=8)
+        self._p3_combo_logica.set("AND")
+        self._p3_combo_logica.pack(side="left", padx=4)
+        ttk.Button(ctrl1, text="Aplicar", command=self._p3_op_logica).pack(side="left", padx=4)
+
+        # --- Fila 2: ruido + etiquetar ---
+        ctrl2 = ttk.Frame(parent)
+        ctrl2.pack(fill="x", pady=3, padx=5)
+
+        ttk.Label(ctrl2, text="S&P cant:").pack(side="left")
+        self._p3_entry_sp_dos = ttk.Entry(ctrl2, width=5)
+        self._p3_entry_sp_dos.insert(0, "0.05")
+        self._p3_entry_sp_dos.pack(side="left", padx=2)
+        ttk.Button(ctrl2, text="Aplicar Img1", command=self._p3_ruido_sp_dos).pack(side="left", padx=2)
+        ttk.Button(ctrl2, text="Aplicar Img2", command=self._p3_ruido_sp_img2).pack(side="left", padx=2)
+        ttk.Separator(ctrl2, orient='vertical').pack(side="left", fill='y', padx=8)
+
+        ttk.Label(ctrl2, text="Gauss σ:").pack(side="left")
+        self._p3_entry_gauss_dos = ttk.Entry(ctrl2, width=5)
+        self._p3_entry_gauss_dos.insert(0, "25")
+        self._p3_entry_gauss_dos.pack(side="left", padx=2)
+        ttk.Button(ctrl2, text="Aplicar Img1", command=self._p3_ruido_gauss_dos).pack(side="left", padx=2)
+        ttk.Button(ctrl2, text="Aplicar Img2", command=self._p3_ruido_gauss_img2).pack(side="left", padx=2)
+        ttk.Separator(ctrl2, orient='vertical').pack(side="left", fill='y', padx=8)
+
+        ttk.Button(ctrl2, text="Etiquetar Img1", command=self._p3_etiquetar_dos_img1).pack(side="left", padx=4)
+        ttk.Button(ctrl2, text="Etiquetar Img2", command=self._p3_etiquetar_dos_img2).pack(side="left", padx=4)
+
+        # --- Imágenes (binarizadas al cargar) + resultado lógico ---
+        frame_imgs = ttk.LabelFrame(parent, text="Imágenes")
+        frame_imgs.pack(fill="x", padx=5, pady=4)
+        for i in range(3):
+            frame_imgs.columnconfigure(i, weight=1)
+
+        ttk.Label(frame_imgs, text="Imagen 1 (binarizada)", font=("Arial", 9, "bold")).grid(row=0, column=0, pady=2)
+        ttk.Label(frame_imgs, text="Imagen 2 (binarizada)", font=("Arial", 9, "bold")).grid(row=0, column=1, pady=2)
+        ttk.Label(frame_imgs, text="Resultado Lógico",       font=("Arial", 9, "bold")).grid(row=0, column=2, pady=2)
+
+        self._p3_panel_img1   = tk.Label(frame_imgs, bg="#e0e0e0", relief="sunken", width=30, height=13)
+        self._p3_panel_img1.grid(row=1, column=0, padx=8, pady=4)
+        self._p3_panel_img2   = tk.Label(frame_imgs, bg="#e0e0e0", relief="sunken", width=30, height=13)
+        self._p3_panel_img2.grid(row=1, column=1, padx=8, pady=4)
+        self._p3_panel_logica = tk.Label(frame_imgs, bg="#e0e0e0", relief="sunken", width=30, height=13)
+        self._p3_panel_logica.grid(row=1, column=2, padx=8, pady=4)
+
+        # --- Procesamiento Imagen 1: Con Ruido | V4 ruido | V8 ruido | V4 binarizada | V8 binarizada ---
+        frame_p1 = ttk.LabelFrame(parent, text="Procesamiento Imagen 1")
+        frame_p1.pack(fill="x", padx=5, pady=4)
+        for i in range(5):
+            frame_p1.columnconfigure(i, weight=1)
+
+        self._lbl_dos_r1_c  = ttk.Label(frame_p1, text="Con Ruido",           font=("Arial", 8, "bold"))
+        self._lbl_dos_r1_v4 = ttk.Label(frame_p1, text="Etiq. V4\n(ruido)",   font=("Arial", 8, "bold"))
+        self._lbl_dos_r1_v8 = ttk.Label(frame_p1, text="Etiq. V8\n(ruido)",   font=("Arial", 8, "bold"))
+        self._lbl_dos_b1_v4 = ttk.Label(frame_p1, text="Etiq. V4\n(binaria)", font=("Arial", 8, "bold"))
+        self._lbl_dos_b1_v8 = ttk.Label(frame_p1, text="Etiq. V8\n(binaria)", font=("Arial", 8, "bold"))
+        for col, lbl in enumerate([self._lbl_dos_r1_c, self._lbl_dos_r1_v4, self._lbl_dos_r1_v8,
+                                    self._lbl_dos_b1_v4, self._lbl_dos_b1_v8]):
+            lbl.grid(row=0, column=col, pady=2)
+
+        self._p3_panel_ruido1         = tk.Label(frame_p1, bg="#e0e0e0", relief="sunken", width=20, height=11)
+        self._p3_panel_ruido1.grid(row=1, column=0, padx=4, pady=4)
+        self._p3_panel_etiq_v4_img1   = tk.Label(frame_p1, bg="#e0e0e0", relief="sunken", width=20, height=11)
+        self._p3_panel_etiq_v4_img1.grid(row=1, column=1, padx=4, pady=4)
+        self._p3_panel_etiq_v8_img1   = tk.Label(frame_p1, bg="#e0e0e0", relief="sunken", width=20, height=11)
+        self._p3_panel_etiq_v8_img1.grid(row=1, column=2, padx=4, pady=4)
+        self._p3_panel_etiq_v4_img1_f = tk.Label(frame_p1, bg="#e0e0e0", relief="sunken", width=20, height=11)
+        self._p3_panel_etiq_v4_img1_f.grid(row=1, column=3, padx=4, pady=4)
+        self._p3_panel_etiq_v8_img1_f = tk.Label(frame_p1, bg="#e0e0e0", relief="sunken", width=20, height=11)
+        self._p3_panel_etiq_v8_img1_f.grid(row=1, column=4, padx=4, pady=4)
+
+        # --- Procesamiento Imagen 2 ---
+        frame_p2 = ttk.LabelFrame(parent, text="Procesamiento Imagen 2")
+        frame_p2.pack(fill="x", padx=5, pady=4)
+        for i in range(5):
+            frame_p2.columnconfigure(i, weight=1)
+
+        self._lbl_dos_r2_c  = ttk.Label(frame_p2, text="Con Ruido",           font=("Arial", 8, "bold"))
+        self._lbl_dos_r2_v4 = ttk.Label(frame_p2, text="Etiq. V4\n(ruido)",   font=("Arial", 8, "bold"))
+        self._lbl_dos_r2_v8 = ttk.Label(frame_p2, text="Etiq. V8\n(ruido)",   font=("Arial", 8, "bold"))
+        self._lbl_dos_b2_v4 = ttk.Label(frame_p2, text="Etiq. V4\n(binaria)", font=("Arial", 8, "bold"))
+        self._lbl_dos_b2_v8 = ttk.Label(frame_p2, text="Etiq. V8\n(binaria)", font=("Arial", 8, "bold"))
+        for col, lbl in enumerate([self._lbl_dos_r2_c, self._lbl_dos_r2_v4, self._lbl_dos_r2_v8,
+                                    self._lbl_dos_b2_v4, self._lbl_dos_b2_v8]):
+            lbl.grid(row=0, column=col, pady=2)
+
+        self._p3_panel_ruido2         = tk.Label(frame_p2, bg="#e0e0e0", relief="sunken", width=20, height=11)
+        self._p3_panel_ruido2.grid(row=1, column=0, padx=4, pady=4)
+        self._p3_panel_etiq_v4_img2   = tk.Label(frame_p2, bg="#e0e0e0", relief="sunken", width=20, height=11)
+        self._p3_panel_etiq_v4_img2.grid(row=1, column=1, padx=4, pady=4)
+        self._p3_panel_etiq_v8_img2   = tk.Label(frame_p2, bg="#e0e0e0", relief="sunken", width=20, height=11)
+        self._p3_panel_etiq_v8_img2.grid(row=1, column=2, padx=4, pady=4)
+        self._p3_panel_etiq_v4_img2_f = tk.Label(frame_p2, bg="#e0e0e0", relief="sunken", width=20, height=11)
+        self._p3_panel_etiq_v4_img2_f.grid(row=1, column=3, padx=4, pady=4)
+        self._p3_panel_etiq_v8_img2_f = tk.Label(frame_p2, bg="#e0e0e0", relief="sunken", width=20, height=11)
+        self._p3_panel_etiq_v8_img2_f.grid(row=1, column=4, padx=4, pady=4)
+
+        # --- Resultado Relacional (al fondo) ---
+        frame_rel = ttk.LabelFrame(parent, text="Resultado Relacional")
+        frame_rel.pack(fill="x", padx=5, pady=4)
+        frame_rel.columnconfigure(0, weight=0)
+        frame_rel.columnconfigure(1, weight=1)
+
+        ctrl_rel = ttk.Frame(frame_rel)
+        ctrl_rel.grid(row=0, column=0, columnspan=2, sticky="w", padx=5, pady=4)
+
+        ttk.Label(ctrl_rel, text="Aplicar a:").pack(side="left")
+        self._p3_combo_rel_target = ttk.Combobox(ctrl_rel, values=["Imagen 1", "Imagen 2"],
+                                                   state="readonly", width=10)
+        self._p3_combo_rel_target.set("Imagen 1")
+        self._p3_combo_rel_target.pack(side="left", padx=4)
+        ttk.Label(ctrl_rel, text="Op.:").pack(side="left")
+        self._p3_combo_relacional = ttk.Combobox(ctrl_rel, values=[">", "<", "=="], state="readonly", width=4)
+        self._p3_combo_relacional.set(">")
+        self._p3_combo_relacional.pack(side="left", padx=2)
+        ttk.Label(ctrl_rel, text="Umbral:").pack(side="left")
+        self._p3_entry_umbral_rel = ttk.Entry(ctrl_rel, width=5)
+        self._p3_entry_umbral_rel.insert(0, "128")
+        self._p3_entry_umbral_rel.pack(side="left", padx=2)
+        ttk.Button(ctrl_rel, text="Aplicar", command=self._p3_op_relacional).pack(side="left", padx=6)
+
+        self._p3_panel_relacional = tk.Label(frame_rel, bg="#e0e0e0", relief="sunken", width=30, height=12)
+        self._p3_panel_relacional.grid(row=1, column=0, columnspan=2, padx=10, pady=5)
+
+        # Barra de estado
+        self._lbl_p3_status = ttk.Label(parent, text="Carga las imágenes para comenzar.",
+                                         font=("Arial", 9), foreground="gray")
+        self._lbl_p3_status.pack(pady=3)
+
+    # ---------- Una Imagen (Parte C) ----------
+
+    def _p3_construir_una_imagen(self):
+        parent = self._frame_p3_contenido
+
+        # --- Barra de controles ---
+        frame_ctrl = ttk.Frame(parent)
+        frame_ctrl.pack(fill="x", pady=4, padx=5)
+
+        ttk.Button(frame_ctrl, text="Cargar Imagen", command=self._p3_cargar_img_una).pack(side="left", padx=4)
+        ttk.Separator(frame_ctrl, orient='vertical').pack(side="left", fill='y', padx=6)
+
+        ttk.Button(frame_ctrl, text="Convertir a Grises", command=self._p3_grises_una).pack(side="left", padx=4)
+        ttk.Separator(frame_ctrl, orient='vertical').pack(side="left", fill='y', padx=6)
+
+        ttk.Label(frame_ctrl, text="Umbral:").pack(side="left")
+        self._p3_entry_umbral_una = ttk.Entry(frame_ctrl, width=5)
+        self._p3_entry_umbral_una.insert(0, "128")
+        self._p3_entry_umbral_una.pack(side="left", padx=2)
+        ttk.Button(frame_ctrl, text="Binarizar Fijo", command=self._p3_binarizar_fijo_una).pack(side="left", padx=2)
+        ttk.Button(frame_ctrl, text="Binarizar Otsu", command=self._p3_binarizar_otsu_una).pack(side="left", padx=2)
+        ttk.Separator(frame_ctrl, orient='vertical').pack(side="left", fill='y', padx=6)
+
+        ttk.Label(frame_ctrl, text="S&P:").pack(side="left")
+        self._p3_entry_sp_una = ttk.Entry(frame_ctrl, width=5)
+        self._p3_entry_sp_una.insert(0, "0.05")
+        self._p3_entry_sp_una.pack(side="left", padx=2)
+        ttk.Button(frame_ctrl, text="Aplicar S&P", command=self._p3_ruido_sp_una).pack(side="left", padx=2)
+        ttk.Separator(frame_ctrl, orient='vertical').pack(side="left", fill='y', padx=6)
+
+        ttk.Label(frame_ctrl, text="Gauss sigma:").pack(side="left")
+        self._p3_entry_gauss_una = ttk.Entry(frame_ctrl, width=5)
+        self._p3_entry_gauss_una.insert(0, "25")
+        self._p3_entry_gauss_una.pack(side="left", padx=2)
+        ttk.Button(frame_ctrl, text="Aplicar Gaussiano", command=self._p3_ruido_gauss_una).pack(side="left", padx=2)
+        ttk.Separator(frame_ctrl, orient='vertical').pack(side="left", fill='y', padx=6)
+
+        ttk.Button(frame_ctrl, text="Etiquetar V4", command=self._p3_etiquetar_v4_una).pack(side="left", padx=4)
+        ttk.Button(frame_ctrl, text="Etiquetar V8", command=self._p3_etiquetar_v8_una).pack(side="left", padx=4)
+
+        # --- Fila superior: procesamiento ---
+        frame_proc = ttk.LabelFrame(parent, text="Procesamiento")
+        frame_proc.pack(fill="x", padx=5, pady=5)
+        for i in range(4):
+            frame_proc.columnconfigure(i, weight=1)
+
+        ttk.Label(frame_proc, text="Original",  font=("Arial", 9, "bold")).grid(row=0, column=0, pady=2)
+        ttk.Label(frame_proc, text="Grises",    font=("Arial", 9, "bold")).grid(row=0, column=1, pady=2)
+        ttk.Label(frame_proc, text="Binaria",   font=("Arial", 9, "bold")).grid(row=0, column=2, pady=2)
+        ttk.Label(frame_proc, text="Con Ruido", font=("Arial", 9, "bold")).grid(row=0, column=3, pady=2)
+
+        self._p3_panel_una_orig  = tk.Label(frame_proc, bg="#e0e0e0", relief="sunken", width=22, height=12)
+        self._p3_panel_una_orig.grid(row=1, column=0, padx=5, pady=5)
+        self._p3_panel_una_gris  = tk.Label(frame_proc, bg="#e0e0e0", relief="sunken", width=22, height=12)
+        self._p3_panel_una_gris.grid(row=1, column=1, padx=5, pady=5)
+        self._p3_panel_una_bin   = tk.Label(frame_proc, bg="#e0e0e0", relief="sunken", width=22, height=12)
+        self._p3_panel_una_bin.grid(row=1, column=2, padx=5, pady=5)
+        self._p3_panel_una_ruido = tk.Label(frame_proc, bg="#e0e0e0", relief="sunken", width=22, height=12)
+        self._p3_panel_una_ruido.grid(row=1, column=3, padx=5, pady=5)
+
+        # --- Fila inferior: etiquetado ---
+        frame_etiq = ttk.LabelFrame(parent, text="Etiquetado")
+        frame_etiq.pack(fill="x", padx=5, pady=5)
+        for i in range(4):
+            frame_etiq.columnconfigure(i, weight=1)
+
+        # Sub-título: con ruido
+        ttk.Label(frame_etiq, text="Con Ruido", font=("Arial", 9, "italic"),
+                  foreground="#555").grid(row=0, column=0, columnspan=4, pady=(4, 0))
+
+        self._lbl_p3_etiq_v4 = ttk.Label(frame_etiq, text="Etiquetas V4", font=("Arial", 9, "bold"))
+        self._lbl_p3_etiq_v4.grid(row=1, column=0, pady=2)
+        self._lbl_p3_cont_v4 = ttk.Label(frame_etiq, text="Contornos V4", font=("Arial", 9, "bold"))
+        self._lbl_p3_cont_v4.grid(row=1, column=1, pady=2)
+        self._lbl_p3_etiq_v8 = ttk.Label(frame_etiq, text="Etiquetas V8", font=("Arial", 9, "bold"))
+        self._lbl_p3_etiq_v8.grid(row=1, column=2, pady=2)
+        self._lbl_p3_cont_v8 = ttk.Label(frame_etiq, text="Contornos V8", font=("Arial", 9, "bold"))
+        self._lbl_p3_cont_v8.grid(row=1, column=3, pady=2)
+
+        self._p3_panel_etiq_v4 = tk.Label(frame_etiq, bg="#e0e0e0", relief="sunken", width=22, height=10)
+        self._p3_panel_etiq_v4.grid(row=2, column=0, padx=5, pady=4)
+        self._p3_panel_cont_v4 = tk.Label(frame_etiq, bg="#e0e0e0", relief="sunken", width=22, height=10)
+        self._p3_panel_cont_v4.grid(row=2, column=1, padx=5, pady=4)
+        self._p3_panel_etiq_v8 = tk.Label(frame_etiq, bg="#e0e0e0", relief="sunken", width=22, height=10)
+        self._p3_panel_etiq_v8.grid(row=2, column=2, padx=5, pady=4)
+        self._p3_panel_cont_v8 = tk.Label(frame_etiq, bg="#e0e0e0", relief="sunken", width=22, height=10)
+        self._p3_panel_cont_v8.grid(row=2, column=3, padx=5, pady=4)
+
+        # Sub-título: imagen binaria sin ruido
+        ttk.Label(frame_etiq, text="Imagen Binaria (sin ruido)", font=("Arial", 9, "italic"),
+                  foreground="#555").grid(row=3, column=0, columnspan=4, pady=(6, 0))
+
+        self._lbl_p3_etiq_v4_f = ttk.Label(frame_etiq, text="Etiquetas V4", font=("Arial", 9, "bold"))
+        self._lbl_p3_etiq_v4_f.grid(row=4, column=0, pady=2)
+        self._lbl_p3_cont_v4_f = ttk.Label(frame_etiq, text="Contornos V4", font=("Arial", 9, "bold"))
+        self._lbl_p3_cont_v4_f.grid(row=4, column=1, pady=2)
+        self._lbl_p3_etiq_v8_f = ttk.Label(frame_etiq, text="Etiquetas V8", font=("Arial", 9, "bold"))
+        self._lbl_p3_etiq_v8_f.grid(row=4, column=2, pady=2)
+        self._lbl_p3_cont_v8_f = ttk.Label(frame_etiq, text="Contornos V8", font=("Arial", 9, "bold"))
+        self._lbl_p3_cont_v8_f.grid(row=4, column=3, pady=2)
+
+        self._p3_panel_etiq_v4_f = tk.Label(frame_etiq, bg="#e0e0e0", relief="sunken", width=22, height=10)
+        self._p3_panel_etiq_v4_f.grid(row=5, column=0, padx=5, pady=4)
+        self._p3_panel_cont_v4_f = tk.Label(frame_etiq, bg="#e0e0e0", relief="sunken", width=22, height=10)
+        self._p3_panel_cont_v4_f.grid(row=5, column=1, padx=5, pady=4)
+        self._p3_panel_etiq_v8_f = tk.Label(frame_etiq, bg="#e0e0e0", relief="sunken", width=22, height=10)
+        self._p3_panel_etiq_v8_f.grid(row=5, column=2, padx=5, pady=4)
+        self._p3_panel_cont_v8_f = tk.Label(frame_etiq, bg="#e0e0e0", relief="sunken", width=22, height=10)
+        self._p3_panel_cont_v8_f.grid(row=5, column=3, padx=5, pady=4)
+
+        # Barra de estado
+        self._lbl_p3_status = ttk.Label(parent, text="Carga una imagen para comenzar.",
+                                         font=("Arial", 9), foreground="gray")
+        self._lbl_p3_status.pack(pady=3)
+
+    # ---------- Manejadores de eventos P3 — Dos Imágenes ----------
+
+    def _p3_cargar_img1(self):
+        ruta = filedialog.askopenfilename(filetypes=[("Imágenes", "*.jpg *.jpeg *.png")])
+        if ruta:
+            img_bin = self.backend.cargar_img1_p3(ruta)
+            self._p2_mostrar(self._p3_panel_img1, img_bin, 200)
+            for p in [self._p3_panel_relacional, self._p3_panel_ruido1,
+                      self._p3_panel_etiq_v4_img1, self._p3_panel_etiq_v8_img1,
+                      self._p3_panel_etiq_v4_img1_f, self._p3_panel_etiq_v8_img1_f]:
+                p.config(image='')
+            self._lbl_dos_r1_v4.config(text="Etiq. V4\n(ruido)")
+            self._lbl_dos_r1_v8.config(text="Etiq. V8\n(ruido)")
+            self._lbl_dos_b1_v4.config(text="Etiq. V4\n(binaria)")
+            self._lbl_dos_b1_v8.config(text="Etiq. V8\n(binaria)")
+            self._lbl_p3_status.config(text="Imagen 1 cargada y binarizada.", foreground="blue")
+
+    def _p3_cargar_img2(self):
+        ruta = filedialog.askopenfilename(filetypes=[("Imágenes", "*.jpg *.jpeg *.png")])
+        if ruta:
+            img_bin = self.backend.cargar_img2_p3(ruta)
+            self._p2_mostrar(self._p3_panel_img2, img_bin, 200)
+            for p in [self._p3_panel_ruido2,
+                      self._p3_panel_etiq_v4_img2, self._p3_panel_etiq_v8_img2,
+                      self._p3_panel_etiq_v4_img2_f, self._p3_panel_etiq_v8_img2_f]:
+                p.config(image='')
+            self._lbl_dos_r2_v4.config(text="Etiq. V4\n(ruido)")
+            self._lbl_dos_r2_v8.config(text="Etiq. V8\n(ruido)")
+            self._lbl_dos_b2_v4.config(text="Etiq. V4\n(binaria)")
+            self._lbl_dos_b2_v8.config(text="Etiq. V8\n(binaria)")
+            self._lbl_p3_status.config(text="Imagen 2 cargada y binarizada.", foreground="blue")
+
+    def _p3_op_logica(self):
+        operacion = self._p3_combo_logica.get()
+        resultado = self.backend.operacion_logica_p3(operacion)
+        if resultado is None:
+            self._lbl_p3_status.config(
+                text="Carga las imágenes necesarias para esta operación.", foreground="red")
+            return
+        self._p2_mostrar(self._p3_panel_logica, resultado, 200)
+        self._lbl_p3_status.config(text=f"Operación lógica {operacion} aplicada.", foreground="green")
+
+    def _p3_op_relacional(self):
+        op     = self._p3_combo_relacional.get()
+        target = 1 if self._p3_combo_rel_target.get() == "Imagen 1" else 2
+        try:
+            umbral = max(0, min(255, int(self._p3_entry_umbral_rel.get())))
+        except ValueError:
+            umbral = 128
+        resultado = self.backend.operacion_relacional_p3(op, umbral, target)
+        if resultado is None:
+            self._lbl_p3_status.config(
+                text=f"Primero carga la Imagen {target}.", foreground="red")
+            return
+        self._p2_mostrar(self._p3_panel_relacional, resultado, 200)
+        self._lbl_p3_status.config(
+            text=f"Operación relacional (Img{target}) pixel {op} {umbral} aplicada.", foreground="green")
+
+    def _p3_ruido_sp_dos(self):
+        try:
+            cantidad = float(self._p3_entry_sp_dos.get())
+        except ValueError:
+            cantidad = 0.05
+        resultado = self.backend.ruido_sp_img1_p3(cantidad)
+        if resultado is None:
+            self._lbl_p3_status.config(text="Primero carga la Imagen 1.", foreground="red")
+            return
+        self._p2_mostrar(self._p3_panel_ruido1, resultado, 150)
+        self._lbl_p3_status.config(text=f"Ruido S&P (cant={cantidad}) aplicado a Imagen 1.", foreground="green")
+
+    def _p3_ruido_gauss_dos(self):
+        try:
+            sigma = float(self._p3_entry_gauss_dos.get())
+        except ValueError:
+            sigma = 25.0
+        resultado = self.backend.ruido_gauss_img1_p3(sigma)
+        if resultado is None:
+            self._lbl_p3_status.config(text="Primero carga la Imagen 1.", foreground="red")
+            return
+        self._p2_mostrar(self._p3_panel_ruido1, resultado, 150)
+        self._lbl_p3_status.config(text=f"Ruido Gaussiano (σ={sigma}) aplicado a Imagen 1.", foreground="green")
+
+    def _p3_ruido_sp_img2(self):
+        try:
+            cantidad = float(self._p3_entry_sp_dos.get())
+        except ValueError:
+            cantidad = 0.05
+        resultado = self.backend.ruido_sp_img2_p3(cantidad)
+        if resultado is None:
+            self._lbl_p3_status.config(text="Primero carga la Imagen 2.", foreground="red")
+            return
+        self._p2_mostrar(self._p3_panel_ruido2, resultado, 150)
+        self._lbl_p3_status.config(text=f"Ruido S&P (cant={cantidad}) aplicado a Imagen 2.", foreground="green")
+
+    def _p3_ruido_gauss_img2(self):
+        try:
+            sigma = float(self._p3_entry_gauss_dos.get())
+        except ValueError:
+            sigma = 25.0
+        resultado = self.backend.ruido_gauss_img2_p3(sigma)
+        if resultado is None:
+            self._lbl_p3_status.config(text="Primero carga la Imagen 2.", foreground="red")
+            return
+        self._p2_mostrar(self._p3_panel_ruido2, resultado, 150)
+        self._lbl_p3_status.config(text=f"Ruido Gaussiano (σ={sigma}) aplicado a Imagen 2.", foreground="green")
+
+    def _p3_etiquetar_dos_img1(self):
+        src_ruido = self.backend.img1_ruidosa_p3
+        src_bin   = self.backend.img1_bin_p3
+        if src_ruido is None:
+            self._lbl_p3_status.config(text="Primero aplica ruido a la Imagen 1.", foreground="red")
+            return
+        c4,  _, cnt4  = self.backend.etiquetar_p3(src_ruido, 4)
+        c8,  _, cnt8  = self.backend.etiquetar_p3(src_ruido, 8)
+        c4b, _, cnt4b = self.backend.etiquetar_p3(src_bin,   4)
+        c8b, _, cnt8b = self.backend.etiquetar_p3(src_bin,   8)
+        self._p2_mostrar(self._p3_panel_etiq_v4_img1,   c4,  160)
+        self._p2_mostrar(self._p3_panel_etiq_v8_img1,   c8,  160)
+        self._p2_mostrar(self._p3_panel_etiq_v4_img1_f, c4b, 160)
+        self._p2_mostrar(self._p3_panel_etiq_v8_img1_f, c8b, 160)
+        self._lbl_dos_r1_v4.config(text=f"Etiq. V4\n({cnt4} obj ruido)")
+        self._lbl_dos_r1_v8.config(text=f"Etiq. V8\n({cnt8} obj ruido)")
+        self._lbl_dos_b1_v4.config(text=f"Etiq. V4\n({cnt4b} obj bin)")
+        self._lbl_dos_b1_v8.config(text=f"Etiq. V8\n({cnt8b} obj bin)")
+        self._lbl_p3_status.config(
+            text=f"Img1 — V4: ruido={cnt4} / binaria={cnt4b}  |  V8: ruido={cnt8} / binaria={cnt8b}",
+            foreground="green")
+
+    def _p3_etiquetar_dos_img2(self):
+        src_ruido = self.backend.img2_ruidosa_p3
+        src_bin   = self.backend.img2_bin_p3
+        if src_ruido is None:
+            self._lbl_p3_status.config(text="Primero aplica ruido a la Imagen 2.", foreground="red")
+            return
+        c4,  _, cnt4  = self.backend.etiquetar_p3(src_ruido, 4)
+        c8,  _, cnt8  = self.backend.etiquetar_p3(src_ruido, 8)
+        c4b, _, cnt4b = self.backend.etiquetar_p3(src_bin,   4)
+        c8b, _, cnt8b = self.backend.etiquetar_p3(src_bin,   8)
+        self._p2_mostrar(self._p3_panel_etiq_v4_img2,   c4,  160)
+        self._p2_mostrar(self._p3_panel_etiq_v8_img2,   c8,  160)
+        self._p2_mostrar(self._p3_panel_etiq_v4_img2_f, c4b, 160)
+        self._p2_mostrar(self._p3_panel_etiq_v8_img2_f, c8b, 160)
+        self._lbl_dos_r2_v4.config(text=f"Etiq. V4\n({cnt4} obj ruido)")
+        self._lbl_dos_r2_v8.config(text=f"Etiq. V8\n({cnt8} obj ruido)")
+        self._lbl_dos_b2_v4.config(text=f"Etiq. V4\n({cnt4b} obj bin)")
+        self._lbl_dos_b2_v8.config(text=f"Etiq. V8\n({cnt8b} obj bin)")
+        self._lbl_p3_status.config(
+            text=f"Img2 — V4: ruido={cnt4} / binaria={cnt4b}  |  V8: ruido={cnt8} / binaria={cnt8b}",
+            foreground="green")
+
+    # ---------- Manejadores de eventos P3 — Una Imagen ----------
+
+    def _p3_cargar_img_una(self):
+        ruta = filedialog.askopenfilename(filetypes=[("Imágenes", "*.jpg *.jpeg *.png")])
+        if ruta:
+            img = self.backend.cargar_img_una_p3(ruta)
+            self._p2_mostrar(self._p3_panel_una_orig, img, 180)
+            for panel in [self._p3_panel_una_gris, self._p3_panel_una_bin, self._p3_panel_una_ruido,
+                          self._p3_panel_etiq_v4, self._p3_panel_cont_v4,
+                          self._p3_panel_etiq_v8, self._p3_panel_cont_v8,
+                          self._p3_panel_etiq_v4_f, self._p3_panel_cont_v4_f,
+                          self._p3_panel_etiq_v8_f, self._p3_panel_cont_v8_f]:
+                panel.config(image='')
+            self._lbl_p3_etiq_v4.config(text="Etiquetas V4")
+            self._lbl_p3_cont_v4.config(text="Contornos V4")
+            self._lbl_p3_etiq_v8.config(text="Etiquetas V8")
+            self._lbl_p3_cont_v8.config(text="Contornos V8")
+            self._lbl_p3_etiq_v4_f.config(text="Etiquetas V4")
+            self._lbl_p3_cont_v4_f.config(text="Contornos V4")
+            self._lbl_p3_etiq_v8_f.config(text="Etiquetas V8")
+            self._lbl_p3_cont_v8_f.config(text="Contornos V8")
+            self._lbl_p3_status.config(text="Imagen cargada.", foreground="blue")
+
+    def _p3_grises_una(self):
+        img = self.backend.convertir_gris_una_p3()
+        if img is None:
+            self._lbl_p3_status.config(text="Primero carga una imagen.", foreground="red")
+            return
+        self._p2_mostrar(self._p3_panel_una_gris, img, 180)
+        self._lbl_p3_status.config(text="Imagen convertida a escala de grises.", foreground="green")
+
+    def _p3_binarizar_fijo_una(self):
+        try:
+            umbral = max(0, min(255, int(self._p3_entry_umbral_una.get())))
+        except ValueError:
+            umbral = 128
+        img, thresh = self.backend.binarizar_una_p3(umbral)
+        if img is None:
+            self._lbl_p3_status.config(text="Primero convierte la imagen a grises.", foreground="red")
+            return
+        self._p2_mostrar(self._p3_panel_una_bin, img, 180)
+        self._lbl_p3_status.config(
+            text=f"Binarización fija aplicada — umbral = {int(thresh)}.", foreground="green")
+
+    def _p3_binarizar_otsu_una(self):
+        img, thresh = self.backend.binarizar_una_p3(None)
+        if img is None:
+            self._lbl_p3_status.config(text="Primero convierte la imagen a grises.", foreground="red")
+            return
+        self._p2_mostrar(self._p3_panel_una_bin, img, 180)
+        self._lbl_p3_status.config(
+            text=f"Binarización Otsu — umbral automático = {int(thresh)}.", foreground="green")
+
+    def _p3_ruido_sp_una(self):
+        try:
+            cantidad = float(self._p3_entry_sp_una.get())
+        except ValueError:
+            cantidad = 0.05
+        img = self.backend.ruido_sp_una_p3(cantidad)
+        if img is None:
+            self._lbl_p3_status.config(text="Primero binariza la imagen.", foreground="red")
+            return
+        self._p2_mostrar(self._p3_panel_una_ruido, img, 180)
+        self._lbl_p3_status.config(text=f"Ruido S&P (cant={cantidad}) aplicado.", foreground="green")
+
+    def _p3_ruido_gauss_una(self):
+        try:
+            sigma = float(self._p3_entry_gauss_una.get())
+        except ValueError:
+            sigma = 25.0
+        img = self.backend.ruido_gauss_una_p3(sigma)
+        if img is None:
+            self._lbl_p3_status.config(text="Primero convierte la imagen a grises.", foreground="red")
+            return
+        self._p2_mostrar(self._p3_panel_una_ruido, img, 180)
+        self._lbl_p3_status.config(text=f"Ruido Gaussiano (sigma={sigma}) aplicado.", foreground="green")
+
+    def _p3_etiquetar_v4_una(self):
+        src = self.backend.img_una_ruidosa_p3 if self.backend.img_una_ruidosa_p3 is not None \
+              else self.backend.img_una_bin_p3
+        colored, contoured, count = self.backend.etiquetar_p3(src, connectivity=4)
+        if colored is None:
+            self._lbl_p3_status.config(
+                text="Primero binariza la imagen (o aplica ruido).", foreground="red")
+            return
+        self._p2_mostrar(self._p3_panel_etiq_v4, colored, 180)
+        self._p2_mostrar(self._p3_panel_cont_v4, contoured, 180)
+        self._lbl_p3_etiq_v4.config(text=f"Etiquetas V4 ({count} obj)")
+        self._lbl_p3_cont_v4.config(text=f"Contornos V4 ({count} obj)")
+
+        colored_f, contoured_f, count_f = self.backend.etiquetar_p3(self.backend.img_una_bin_p3, connectivity=4)
+        if colored_f is not None:
+            self._p2_mostrar(self._p3_panel_etiq_v4_f, colored_f, 180)
+            self._p2_mostrar(self._p3_panel_cont_v4_f, contoured_f, 180)
+            self._lbl_p3_etiq_v4_f.config(text=f"Etiquetas V4 ({count_f} obj)")
+            self._lbl_p3_cont_v4_f.config(text=f"Contornos V4 ({count_f} obj)")
+
+        self._lbl_p3_status.config(
+            text=f"Etiquetado V4 — con ruido: {count} obj  |  binaria: {count_f} obj.", foreground="green")
+
+    def _p3_etiquetar_v8_una(self):
+        src = self.backend.img_una_ruidosa_p3 if self.backend.img_una_ruidosa_p3 is not None \
+              else self.backend.img_una_bin_p3
+        colored, contoured, count = self.backend.etiquetar_p3(src, connectivity=8)
+        if colored is None:
+            self._lbl_p3_status.config(
+                text="Primero binariza la imagen (o aplica ruido).", foreground="red")
+            return
+        self._p2_mostrar(self._p3_panel_etiq_v8, colored, 180)
+        self._p2_mostrar(self._p3_panel_cont_v8, contoured, 180)
+        self._lbl_p3_etiq_v8.config(text=f"Etiquetas V8 ({count} obj)")
+        self._lbl_p3_cont_v8.config(text=f"Contornos V8 ({count} obj)")
+
+        colored_f, contoured_f, count_f = self.backend.etiquetar_p3(self.backend.img_una_bin_p3, connectivity=8)
+        if colored_f is not None:
+            self._p2_mostrar(self._p3_panel_etiq_v8_f, colored_f, 180)
+            self._p2_mostrar(self._p3_panel_cont_v8_f, contoured_f, 180)
+            self._lbl_p3_etiq_v8_f.config(text=f"Etiquetas V8 ({count_f} obj)")
+            self._lbl_p3_cont_v8_f.config(text=f"Contornos V8 ({count_f} obj)")
+
+        self._lbl_p3_status.config(
+            text=f"Etiquetado V8 — con ruido: {count} obj  |  binaria: {count_f} obj.", foreground="green")

@@ -7,6 +7,7 @@ class InterfazApp:
     def __init__(self, root, backend):
         self.root = root
         self.backend = backend
+        self._panel_imgs = {}   # id(panel) → img cv2 original para guardar
         self.root.title("Prácticas de Visión por Computadora")
         self.root.geometry("1100x650")
 
@@ -20,7 +21,7 @@ class InterfazApp:
         ttk.Label(self.frame_top, text="Selecciona la Práctica:", font=("Arial", 11, "bold")).pack(side="left", padx=5)
 
         self.combo_practicas = ttk.Combobox(self.frame_top, state="readonly", width=30)
-        self.combo_practicas['values'] = ("1. Mapas de Calor", "2. Modelos de Color", "3. Operaciones y Etiquetado")
+        self.combo_practicas['values'] = ("1. Mapas de Calor", "2. Modelos de Color", "3. Operaciones y Etiquetado", "4. Morfología Matemática")
         self.combo_practicas.set("1. Mapas de Calor")
         self.combo_practicas.pack(side="left", padx=10)
         self.combo_practicas.bind("<<ComboboxSelected>>", self.cambiar_practica)
@@ -46,6 +47,9 @@ class InterfazApp:
         elif "Operaciones" in seleccion:
             self.root.geometry("1200x1000")
             self.cargar_interfaz_practica3()
+        elif "Morfología" in seleccion:
+            self.root.geometry("1100x700")
+            self.cargar_interfaz_practica4()
         else:
             ttk.Label(self.workspace, text=f"La {seleccion} aún no está implementada.", font=("Arial", 14)).pack(pady=100)
 
@@ -61,6 +65,7 @@ class InterfazApp:
         self.combo_mapas.set("Grises")
         self.combo_mapas.grid(row=0, column=2, padx=5)
         ttk.Button(frame_controles, text="Aplicar mapa", command=self.evento_aplicar_mapa).grid(row=0, column=3, padx=20)
+        ttk.Button(frame_controles, text="Guardar Mapa Nuevo", command=self.evento_guardar_mapa).grid(row=0, column=4, padx=10)
 
         frame_imagenes = ttk.Frame(self.workspace)
         frame_imagenes.pack(fill="both", expand=True, pady=10)
@@ -102,6 +107,16 @@ class InterfazApp:
         if exito:
             self.mostrar_en_panel(self.panel_anterior, self.backend.imagen_anterior)
             self.mostrar_en_panel(self.panel_nuevo, self.backend.imagen_nueva)
+
+    def evento_guardar_mapa(self):
+        if self.backend.imagen_nueva is None:
+            return
+        ruta = filedialog.asksaveasfilename(
+            defaultextension=".png",
+            filetypes=[("PNG", "*.png"), ("JPEG", "*.jpg"), ("Todos", "*.*")]
+        )
+        if ruta:
+            cv2.imwrite(ruta, self.backend.imagen_nueva)
 
     # ==================== PRÁCTICA 2 ====================
 
@@ -156,6 +171,13 @@ class InterfazApp:
         self.panel_p2_c3 = tk.Label(frame_canales, bg="#e0e0e0", relief="sunken", width=28, height=12)
         self.panel_p2_c3.grid(row=1, column=3, padx=6, pady=5)
 
+        ttk.Button(frame_canales, text="Guardar Canal 1",
+                   command=lambda: self._p2_guardar_canal(0)).grid(row=2, column=1, pady=4)
+        ttk.Button(frame_canales, text="Guardar Canal 2",
+                   command=lambda: self._p2_guardar_canal(1)).grid(row=2, column=2, pady=4)
+        ttk.Button(frame_canales, text="Guardar Canal 3",
+                   command=lambda: self._p2_guardar_canal(2)).grid(row=2, column=3, pady=4)
+
         # --- Sección: conversión y binarización ---
         frame_proc = ttk.LabelFrame(self.workspace, text="Conversión y Binarización")
         frame_proc.pack(fill="x", padx=5, pady=5)
@@ -170,6 +192,11 @@ class InterfazApp:
         self.panel_p2_bin  = tk.Label(frame_proc, bg="#e0e0e0", relief="sunken", width=42, height=16)
         self.panel_p2_bin.grid(row=1, column=1, padx=10, pady=5)
 
+        ttk.Button(frame_proc, text="Guardar Grises",
+                   command=self._p2_guardar_gris).grid(row=2, column=0, pady=4)
+        ttk.Button(frame_proc, text="Guardar Binarizada",
+                   command=self._p2_guardar_bin).grid(row=2, column=1, pady=4)
+
         # Barra de estado
         self.lbl_p2_status = ttk.Label(self.workspace, text="Carga una imagen para comenzar.",
                                         font=("Arial", 9), foreground="gray")
@@ -179,6 +206,7 @@ class InterfazApp:
         """Muestra una imagen (BGR o grayscale) en un panel tkinter redimensionada a `size` px."""
         if img_cv2 is None:
             return
+        self._panel_imgs[id(panel)] = img_cv2
         img = cv2.resize(img_cv2, (size, size))
         if len(img.shape) == 2:
             img = cv2.cvtColor(img, cv2.COLOR_GRAY2RGB)
@@ -289,6 +317,57 @@ class InterfazApp:
         ttk.Button(popup, text="Cerrar", command=popup.destroy).pack(side="bottom", pady=8)
 
     # ==================== PRÁCTICA 3 ====================
+
+    def _p2_guardar_canal(self, indice):
+        if not self.backend.componentes_p2 or indice >= len(self.backend.componentes_p2):
+            return
+        img, _ = self.backend.componentes_p2[indice]
+        ruta = filedialog.asksaveasfilename(
+            defaultextension=".png",
+            filetypes=[("PNG", "*.png"), ("JPEG", "*.jpg"), ("Todos", "*.*")]
+        )
+        if ruta:
+            cv2.imwrite(ruta, img)
+
+    def _p2_guardar_gris(self):
+        if self.backend.imagen_gris_p2 is None:
+            return
+        ruta = filedialog.asksaveasfilename(
+            defaultextension=".png",
+            filetypes=[("PNG", "*.png"), ("JPEG", "*.jpg"), ("Todos", "*.*")]
+        )
+        if ruta:
+            cv2.imwrite(ruta, self.backend.imagen_gris_p2)
+
+    def _p2_guardar_bin(self):
+        if self.backend.imagen_binaria_p2 is None:
+            return
+        ruta = filedialog.asksaveasfilename(
+            defaultextension=".png",
+            filetypes=[("PNG", "*.png"), ("JPEG", "*.jpg"), ("Todos", "*.*")]
+        )
+        if ruta:
+            cv2.imwrite(ruta, self.backend.imagen_binaria_p2)
+
+    # ---- helpers de guardado por clic derecho (P3) ----
+
+    def _bind_guardar_panel(self, panel):
+        """Vincula clic derecho en un panel para guardar la imagen almacenada en _panel_imgs."""
+        menu = tk.Menu(self.root, tearoff=0)
+        menu.add_command(label="Guardar imagen",
+                         command=lambda: self._guardar_desde_panel(panel))
+        panel.bind("<Button-3>", lambda e: menu.tk_popup(e.x_root, e.y_root))
+
+    def _guardar_desde_panel(self, panel):
+        img = self._panel_imgs.get(id(panel))
+        if img is None:
+            return
+        ruta = filedialog.asksaveasfilename(
+            defaultextension=".png",
+            filetypes=[("PNG", "*.png"), ("JPEG", "*.jpg"), ("Todos", "*.*")]
+        )
+        if ruta:
+            cv2.imwrite(ruta, img)
 
     def cargar_interfaz_practica3(self):
         # --- Selector de modo ---
@@ -460,8 +539,18 @@ class InterfazApp:
         self._p3_panel_relacional = tk.Label(frame_rel, bg="#e0e0e0", relief="sunken", width=30, height=12)
         self._p3_panel_relacional.grid(row=1, column=0, columnspan=2, padx=10, pady=5)
 
+        # Clic derecho para guardar en todos los paneles
+        for _panel in [self._p3_panel_img1, self._p3_panel_img2, self._p3_panel_logica,
+                       self._p3_panel_ruido1, self._p3_panel_ruido2,
+                       self._p3_panel_etiq_v4_img1, self._p3_panel_etiq_v8_img1,
+                       self._p3_panel_etiq_v4_img1_f, self._p3_panel_etiq_v8_img1_f,
+                       self._p3_panel_etiq_v4_img2, self._p3_panel_etiq_v8_img2,
+                       self._p3_panel_etiq_v4_img2_f, self._p3_panel_etiq_v8_img2_f,
+                       self._p3_panel_relacional]:
+            self._bind_guardar_panel(_panel)
+
         # Barra de estado
-        self._lbl_p3_status = ttk.Label(parent, text="Carga las imágenes para comenzar.",
+        self._lbl_p3_status = ttk.Label(parent, text="Carga las imágenes para comenzar.  |  Clic derecho sobre cualquier imagen para guardarla.",
                                          font=("Arial", 9), foreground="gray")
         self._lbl_p3_status.pack(pady=3)
 
@@ -500,6 +589,9 @@ class InterfazApp:
         self._p3_entry_gauss_una.insert(0, "25")
         self._p3_entry_gauss_una.pack(side="left", padx=2)
         ttk.Button(frame_ctrl, text="Aplicar Gaussiano", command=self._p3_ruido_gauss_una).pack(side="left", padx=2)
+        ttk.Separator(frame_ctrl, orient='vertical').pack(side="left", fill='y', padx=6)
+
+        ttk.Button(frame_ctrl, text="NOT Binaria", command=self._p3_not_una).pack(side="left", padx=4)
         ttk.Separator(frame_ctrl, orient='vertical').pack(side="left", fill='y', padx=6)
 
         ttk.Button(frame_ctrl, text="Etiquetar V4", command=self._p3_etiquetar_v4_una).pack(side="left", padx=4)
@@ -575,8 +667,17 @@ class InterfazApp:
         self._p3_panel_cont_v8_f = tk.Label(frame_etiq, bg="#e0e0e0", relief="sunken", width=22, height=10)
         self._p3_panel_cont_v8_f.grid(row=5, column=3, padx=5, pady=4)
 
+        # Clic derecho para guardar en todos los paneles
+        for _panel in [self._p3_panel_una_orig, self._p3_panel_una_gris,
+                       self._p3_panel_una_bin, self._p3_panel_una_ruido,
+                       self._p3_panel_etiq_v4, self._p3_panel_cont_v4,
+                       self._p3_panel_etiq_v8, self._p3_panel_cont_v8,
+                       self._p3_panel_etiq_v4_f, self._p3_panel_cont_v4_f,
+                       self._p3_panel_etiq_v8_f, self._p3_panel_cont_v8_f]:
+            self._bind_guardar_panel(_panel)
+
         # Barra de estado
-        self._lbl_p3_status = ttk.Label(parent, text="Carga una imagen para comenzar.",
+        self._lbl_p3_status = ttk.Label(parent, text="Carga una imagen para comenzar.  |  Clic derecho sobre cualquier imagen para guardarla.",
                                          font=("Arial", 9), foreground="gray")
         self._lbl_p3_status.pack(pady=3)
 
@@ -732,6 +833,15 @@ class InterfazApp:
 
     # ---------- Manejadores de eventos P3 — Una Imagen ----------
 
+    def _p3_not_una(self):
+        img = self.backend.not_una_p3()
+        if img is None:
+            self._lbl_p3_status.config(text="Primero binariza la imagen.", foreground="red")
+            return
+        self._p2_mostrar(self._p3_panel_una_bin, img, 180)
+        self._p3_panel_una_ruido.config(image='')   # ruido anterior ya no es válido
+        self._lbl_p3_status.config(text="NOT aplicado a la imagen binaria.", foreground="green")
+
     def _p3_cargar_img_una(self):
         ruta = filedialog.askopenfilename(filetypes=[("Imágenes", "*.jpg *.jpeg *.png")])
         if ruta:
@@ -852,3 +962,276 @@ class InterfazApp:
 
         self._lbl_p3_status.config(
             text=f"Etiquetado V8 — con ruido: {count} obj  |  binaria: {count_f} obj.", foreground="green")
+
+    # ==================== PRÁCTICA 4 ====================
+
+    def cargar_interfaz_practica4(self):
+        # --- Controles superiores ---
+        frame_ctrl = ttk.Frame(self.workspace)
+        frame_ctrl.pack(fill="x", pady=8, padx=5)
+
+        ttk.Button(frame_ctrl, text="Subir Imagen", command=self._p4_cargar).pack(side="left", padx=4)
+        ttk.Separator(frame_ctrl, orient='vertical').pack(side="left", fill='y', padx=8)
+
+        ttk.Label(frame_ctrl, text="Operación:").pack(side="left")
+        self._p4_combo_op = ttk.Combobox(
+            frame_ctrl,
+            values=["Erosión", "Dilatación", "Apertura", "Cierre"],
+            state="readonly", width=12
+        )
+        self._p4_combo_op.set("Erosión")
+        self._p4_combo_op.pack(side="left", padx=4)
+
+        ttk.Label(frame_ctrl, text="Kernel (px):").pack(side="left")
+        self._p4_entry_kernel = ttk.Entry(frame_ctrl, width=4)
+        self._p4_entry_kernel.insert(0, "5")
+        self._p4_entry_kernel.pack(side="left", padx=4)
+
+        ttk.Label(frame_ctrl, text="Iteraciones:").pack(side="left")
+        self._p4_entry_iter = ttk.Entry(frame_ctrl, width=4)
+        self._p4_entry_iter.insert(0, "1")
+        self._p4_entry_iter.pack(side="left", padx=4)
+
+        ttk.Button(frame_ctrl, text="Aplicar", command=self._p4_aplicar).pack(side="left", padx=6)
+        ttk.Separator(frame_ctrl, orient='vertical').pack(side="left", fill='y', padx=8)
+
+        ttk.Label(frame_ctrl, text="Umbral:").pack(side="left")
+        self._p4_entry_umbral = ttk.Entry(frame_ctrl, width=4)
+        self._p4_entry_umbral.insert(0, "128")
+        self._p4_entry_umbral.pack(side="left", padx=4)
+        ttk.Button(frame_ctrl, text="Binarizar Fijo",
+                   command=self._p4_binarizar_fijo).pack(side="left", padx=2)
+        ttk.Button(frame_ctrl, text="Binarizar Otsu",
+                   command=self._p4_binarizar_otsu).pack(side="left", padx=2)
+        ttk.Button(frame_ctrl, text="Restaurar Grises",
+                   command=self._p4_restaurar_gris).pack(side="left", padx=4)
+        ttk.Separator(frame_ctrl, orient='vertical').pack(side="left", fill='y', padx=8)
+
+        self._p4_ver_matriz_var = tk.BooleanVar(value=False)
+        ttk.Checkbutton(
+            frame_ctrl, text="Ver Matrices",
+            variable=self._p4_ver_matriz_var,
+            command=self._p4_toggle_matrices
+        ).pack(side="left", padx=4)
+
+        # --- Marco principal con dos columnas ---
+        frame_imgs = ttk.Frame(self.workspace)
+        frame_imgs.pack(fill="both", expand=True, pady=5, padx=10)
+        frame_imgs.columnconfigure(0, weight=1)
+        frame_imgs.columnconfigure(1, weight=1)
+
+        # ---- Panel Izquierdo: Original ----
+        self._lf_orig_p4 = ttk.LabelFrame(frame_imgs, text="Imagen Original (Grises)")
+        lf_orig = self._lf_orig_p4
+        lf_orig.grid(row=0, column=0, padx=10, pady=5, sticky="nsew")
+
+        self._p4_container_orig = ttk.Frame(lf_orig)
+        self._p4_container_orig.pack(padx=5, pady=5)
+
+        self._p4_panel_orig = tk.Label(self._p4_container_orig, bg="#e0e0e0",
+                                        relief="sunken", width=40, height=20)
+        self._p4_panel_orig.pack()
+
+        self._p4_text_frame_orig = ttk.Frame(self._p4_container_orig)
+        self._p4_text_orig = tk.Text(self._p4_text_frame_orig, width=48, height=20,
+                                      font=("Courier", 7), state="disabled", wrap="none")
+        sb_y_o = ttk.Scrollbar(self._p4_text_frame_orig, orient="vertical",
+                                command=self._p4_text_orig.yview)
+        sb_x_o = ttk.Scrollbar(self._p4_text_frame_orig, orient="horizontal",
+                                command=self._p4_text_orig.xview)
+        self._p4_text_orig.configure(yscrollcommand=sb_y_o.set, xscrollcommand=sb_x_o.set)
+        sb_y_o.pack(side="right", fill="y")
+        sb_x_o.pack(side="bottom", fill="x")
+        self._p4_text_orig.pack(side="left", fill="both", expand=True)
+
+        ttk.Button(lf_orig, text="Guardar Original",
+                   command=self._p4_guardar_orig).pack(pady=4)
+
+        # ---- Panel Derecho: Resultado ----
+        lf_res = ttk.LabelFrame(frame_imgs, text="Imagen Resultante")
+        lf_res.grid(row=0, column=1, padx=10, pady=5, sticky="nsew")
+
+        self._p4_container_res = ttk.Frame(lf_res)
+        self._p4_container_res.pack(padx=5, pady=5)
+
+        self._p4_panel_res = tk.Label(self._p4_container_res, bg="#e0e0e0",
+                                       relief="sunken", width=40, height=20)
+        self._p4_panel_res.pack()
+
+        self._p4_text_frame_res = ttk.Frame(self._p4_container_res)
+        self._p4_text_res = tk.Text(self._p4_text_frame_res, width=48, height=20,
+                                     font=("Courier", 7), state="disabled", wrap="none")
+        sb_y_r = ttk.Scrollbar(self._p4_text_frame_res, orient="vertical",
+                                command=self._p4_text_res.yview)
+        sb_x_r = ttk.Scrollbar(self._p4_text_frame_res, orient="horizontal",
+                                command=self._p4_text_res.xview)
+        self._p4_text_res.configure(yscrollcommand=sb_y_r.set, xscrollcommand=sb_x_r.set)
+        sb_y_r.pack(side="right", fill="y")
+        sb_x_r.pack(side="bottom", fill="x")
+        self._p4_text_res.pack(side="left", fill="both", expand=True)
+
+        ttk.Button(lf_res, text="Guardar Resultado",
+                   command=self._p4_guardar_res).pack(pady=4)
+
+        # --- Barra de estado ---
+        self._lbl_p4_status = ttk.Label(
+            self.workspace,
+            text="Carga una imagen para comenzar.",
+            font=("Arial", 9), foreground="gray"
+        )
+        self._lbl_p4_status.pack(pady=3)
+
+    def _p4_mostrar(self, panel, img_gris, size=350):
+        if img_gris is None:
+            return
+        self._panel_imgs[id(panel)] = img_gris
+        img = cv2.resize(img_gris, (size, size))
+        img_rgb = cv2.cvtColor(img, cv2.COLOR_GRAY2RGB)
+        img_pil = Image.fromarray(img_rgb)
+        img_tk = ImageTk.PhotoImage(img_pil)
+        panel.config(image=img_tk, width=size, height=size)
+        panel.image = img_tk
+
+    def _p4_set_text(self, text_widget, img_gris):
+        text_widget.config(state="normal")
+        text_widget.delete("1.0", "end")
+        if img_gris is None:
+            text_widget.insert("end", "(sin imagen)")
+        else:
+            h, w = img_gris.shape
+            MAX = 250
+            sub = img_gris[:MAX, :MAX]
+            rows, cols = sub.shape
+            cw = 3  # ancho de celda (valores 0-255)
+
+            header = f"Shape: {h} × {w} píxeles\n"
+            if h > MAX or w > MAX:
+                header += f"(Mostrando primeras {rows} filas × {cols} columnas)\n"
+            header += "\n"
+
+            top    = "┌" + ("─" * (cw + 2) + "┬") * (cols - 1) + "─" * (cw + 2) + "┐\n"
+            mid    = "├" + ("─" * (cw + 2) + "┼") * (cols - 1) + "─" * (cw + 2) + "┤\n"
+            bottom = "└" + ("─" * (cw + 2) + "┴") * (cols - 1) + "─" * (cw + 2) + "┘"
+
+            lines = [header, top]
+            for i, row in enumerate(sub):
+                lines.append("│" + "│".join(f" {int(v):>{cw}} " for v in row) + "│\n")
+                if i < rows - 1:
+                    lines.append(mid)
+            lines.append(bottom)
+
+            text_widget.insert("end", "".join(lines))
+        text_widget.config(state="disabled")
+
+    def _p4_cargar(self):
+        ruta = filedialog.askopenfilename(filetypes=[("Imágenes", "*.jpg *.jpeg *.png")])
+        if not ruta:
+            return
+        img = self.backend.cargar_imagen_p4(ruta)
+        if img is None:
+            self._lbl_p4_status.config(text="Error al cargar la imagen.", foreground="red")
+            return
+        self._p4_mostrar(self._p4_panel_orig, img)
+        self._p4_panel_res.config(image='')
+        self._p4_set_text(self._p4_text_orig, img)
+        self._p4_set_text(self._p4_text_res, None)
+        self._lbl_p4_status.config(
+            text="Imagen cargada en escala de grises. Selecciona una operación y pulsa Aplicar.",
+            foreground="blue")
+
+    def _p4_aplicar(self):
+        operacion = self._p4_combo_op.get()
+        try:
+            kernel_size = max(1, int(self._p4_entry_kernel.get()))
+        except ValueError:
+            kernel_size = 5
+        try:
+            iteraciones = max(1, int(self._p4_entry_iter.get()))
+        except ValueError:
+            iteraciones = 1
+        resultado = self.backend.morfologia_p4(operacion, kernel_size, iteraciones)
+        if resultado is None:
+            self._lbl_p4_status.config(text="Primero carga una imagen.", foreground="red")
+            return
+        self._p4_mostrar(self._p4_panel_res, resultado)
+        self._p4_set_text(self._p4_text_res, resultado)
+        self._lbl_p4_status.config(
+            text=f"{operacion} aplicada — kernel={kernel_size}×{kernel_size}, iteraciones={iteraciones}.",
+            foreground="green")
+
+    def _p4_toggle_matrices(self):
+        if self._p4_ver_matriz_var.get():
+            self._p4_panel_orig.pack_forget()
+            self._p4_panel_res.pack_forget()
+            self._p4_text_frame_orig.pack(fill="both", expand=True)
+            self._p4_text_frame_res.pack(fill="both", expand=True)
+        else:
+            self._p4_text_frame_orig.pack_forget()
+            self._p4_text_frame_res.pack_forget()
+            self._p4_panel_orig.pack()
+            self._p4_panel_res.pack()
+
+    def _p4_guardar_orig(self):
+        if self.backend.imagen_p4_gris is None:
+            return
+        ruta = filedialog.asksaveasfilename(
+            defaultextension=".png",
+            filetypes=[("PNG", "*.png"), ("JPEG", "*.jpg"), ("Todos", "*.*")]
+        )
+        if ruta:
+            cv2.imwrite(ruta, self.backend.imagen_p4_gris)
+
+    def _p4_guardar_res(self):
+        if self.backend.imagen_p4_resultado is None:
+            return
+        ruta = filedialog.asksaveasfilename(
+            defaultextension=".png",
+            filetypes=[("PNG", "*.png"), ("JPEG", "*.jpg"), ("Todos", "*.*")]
+        )
+        if ruta:
+            cv2.imwrite(ruta, self.backend.imagen_p4_resultado)
+
+    def _p4_binarizar_fijo(self):
+        try:
+            umbral = max(0, min(255, int(self._p4_entry_umbral.get())))
+        except ValueError:
+            umbral = 128
+        img, thresh = self.backend.binarizar_p4(umbral)
+        if img is None:
+            self._lbl_p4_status.config(text="Primero carga una imagen.", foreground="red")
+            return
+        self._p4_mostrar(self._p4_panel_orig, img)
+        self._p4_set_text(self._p4_text_orig, img)
+        self._lf_orig_p4.config(text=f"Imagen Binarizada (umbral fijo={int(thresh)})")
+        self._p4_panel_res.config(image='')
+        self._p4_set_text(self._p4_text_res, None)
+        self._lbl_p4_status.config(
+            text=f"Binarización fija — umbral={int(thresh)}. Las operaciones se aplican a esta imagen.",
+            foreground="green")
+
+    def _p4_binarizar_otsu(self):
+        img, thresh = self.backend.binarizar_p4(None)
+        if img is None:
+            self._lbl_p4_status.config(text="Primero carga una imagen.", foreground="red")
+            return
+        self._p4_mostrar(self._p4_panel_orig, img)
+        self._p4_set_text(self._p4_text_orig, img)
+        self._lf_orig_p4.config(text=f"Imagen Binarizada — Otsu (umbral={int(thresh)})")
+        self._p4_panel_res.config(image='')
+        self._p4_set_text(self._p4_text_res, None)
+        self._lbl_p4_status.config(
+            text=f"Binarización Otsu — umbral automático={int(thresh)}. Las operaciones se aplican a esta imagen.",
+            foreground="green")
+
+    def _p4_restaurar_gris(self):
+        if self.backend.imagen_p4_gris is None:
+            return
+        self.backend.imagen_p4_bin = None
+        self.backend.imagen_p4_trabajo = self.backend.imagen_p4_gris
+        self.backend.imagen_p4_resultado = None
+        self._p4_mostrar(self._p4_panel_orig, self.backend.imagen_p4_gris)
+        self._p4_set_text(self._p4_text_orig, self.backend.imagen_p4_gris)
+        self._p4_panel_res.config(image='')
+        self._p4_set_text(self._p4_text_res, None)
+        self._lf_orig_p4.config(text="Imagen Original (Grises)")
+        self._lbl_p4_status.config(text="Restaurada imagen en escala de grises.", foreground="blue")

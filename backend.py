@@ -43,6 +43,12 @@ class ProcesadorImagenes:
         self.img_una_bin_p3 = None
         self.img_una_ruidosa_p3 = None
 
+        # Estado P4 - Morfología Matemática
+        self.imagen_p4_gris = None
+        self.imagen_p4_bin = None
+        self.imagen_p4_trabajo = None   # imagen activa para morfología (gris o binaria)
+        self.imagen_p4_resultado = None
+
     def obtener_nombres_mapas(self):
         return list(self.mapas.keys())
 
@@ -176,6 +182,10 @@ class ProcesadorImagenes:
         minimo     = int(np.min(pixels))
         maximo     = int(np.max(pixels))
 
+        umbral_otsu, _ = cv2.threshold(
+            self.imagen_gris_p2, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU
+        )
+
         stats = {
             "Ancho (px)":       ancho,
             "Alto (px)":        alto,
@@ -187,6 +197,7 @@ class ProcesadorImagenes:
             "Desv. Estándar":   round(desv_std, 2),
             "Mínimo":           minimo,
             "Máximo":           maximo,
+            "Umbral Otsu":      int(umbral_otsu),
         }
 
         # Figura con el histograma de frecuencia
@@ -335,6 +346,7 @@ class ProcesadorImagenes:
             gris = img_bin_o_gris.copy()
 
         _, binaria = cv2.threshold(gris, 127, 255, cv2.THRESH_BINARY)
+        binaria = cv2.bitwise_not(binaria)   # objetos en blanco, fondo negro
         num_labels, labels = cv2.connectedComponents(binaria, connectivity=connectivity)
         count = num_labels - 1
 
@@ -384,6 +396,14 @@ class ProcesadorImagenes:
             )
         return self.img_una_bin_p3, thresh_val
 
+    def not_una_p3(self):
+        """Invierte img_una_bin_p3 (NOT lógico) y actualiza el estado."""
+        if self.img_una_bin_p3 is None:
+            return None
+        self.img_una_bin_p3 = cv2.bitwise_not(self.img_una_bin_p3)
+        self.img_una_ruidosa_p3 = None  # el ruido anterior ya no aplica
+        return self.img_una_bin_p3
+
     def ruido_sp_una_p3(self, cantidad):
         """Aplica ruido S&P a img_una_bin_p3. Guarda en img_una_ruidosa_p3."""
         if self.img_una_bin_p3 is None:
@@ -404,3 +424,50 @@ class ProcesadorImagenes:
             return None, None, 0
         filtrada = cv2.medianBlur(self.img_una_ruidosa_p3, 3)
         return self.etiquetar_p3(filtrada, connectivity)
+
+    #                   PRÁCTICA 4
+
+    def cargar_imagen_p4(self, ruta):
+        img = cv2.imread(ruta)
+        if img is None:
+            return None
+        self.imagen_p4_gris = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+        self.imagen_p4_bin = None
+        self.imagen_p4_trabajo = self.imagen_p4_gris
+        self.imagen_p4_resultado = None
+        return self.imagen_p4_gris
+
+    def binarizar_p4(self, umbral=None):
+        """None = Otsu, int = umbral fijo. Retorna (img_bin, thresh_val)."""
+        if self.imagen_p4_gris is None:
+            return None, None
+        if umbral is None:
+            thresh_val, self.imagen_p4_bin = cv2.threshold(
+                self.imagen_p4_gris, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU
+            )
+        else:
+            thresh_val, self.imagen_p4_bin = cv2.threshold(
+                self.imagen_p4_gris, umbral, 255, cv2.THRESH_BINARY
+            )
+        self.imagen_p4_trabajo = self.imagen_p4_bin
+        self.imagen_p4_resultado = None
+        return self.imagen_p4_bin, thresh_val
+
+    def morfologia_p4(self, operacion, kernel_size, iteraciones):
+        if self.imagen_p4_trabajo is None:
+            return None
+        k = max(1, int(kernel_size))
+        it = max(1, int(iteraciones))
+        kernel = np.ones((k, k), np.uint8)
+        if operacion == "Erosión":
+            resultado = cv2.erode(self.imagen_p4_trabajo, kernel, iterations=it)
+        elif operacion == "Dilatación":
+            resultado = cv2.dilate(self.imagen_p4_trabajo, kernel, iterations=it)
+        elif operacion == "Apertura":
+            resultado = cv2.morphologyEx(self.imagen_p4_trabajo, cv2.MORPH_OPEN, kernel, iterations=it)
+        elif operacion == "Cierre":
+            resultado = cv2.morphologyEx(self.imagen_p4_trabajo, cv2.MORPH_CLOSE, kernel, iterations=it)
+        else:
+            return None
+        self.imagen_p4_resultado = resultado
+        return resultado
